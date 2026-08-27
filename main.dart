@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 void main() {
   runApp(const AquaLembreteApp());
@@ -32,6 +34,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _pesoController = TextEditingController();
   double _metaDiaria = 0.0;
   double _consumoAtual = 0.0;
+  bool _carregandoApi = false;
 
   void _calcularMeta() {
     double peso = double.tryParse(_pesoController.text) ?? 0.0;
@@ -41,10 +44,38 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  void _registrarConsumo(double quantidadeMl) {
+  // Integracao com API / Comunicacao com Servidor
+  Future<void> _registrarConsumoComAPI(double quantidadeMl) async {
     setState(() {
-      _consumoAtual += quantidadeMl / 1000;
+      _carregandoApi = true;
     });
+
+    try {
+      final url = Uri.parse('https://httpbin.org/post');
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'quantidade_ml': quantidadeMl,
+          'timestamp': DateTime.now().toIso8601String(),
+        }),
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        setState(() {
+          _consumoAtual += quantidadeMl / 1000;
+        });
+      }
+    } catch (e) {
+      // Fallback local caso ocorra erro de conexao
+      setState(() {
+        _consumoAtual += quantidadeMl / 1000;
+      });
+    } finally {
+      setState(() {
+        _carregandoApi = false;
+      });
+    }
   }
 
   @override
@@ -98,19 +129,21 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: const TextStyle(fontSize: 18),
               ),
               const SizedBox(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  ElevatedButton(
-                    onPressed: () => _registrarConsumo(250),
-                    child: const Text('+ 250 ml'),
-                  ),
-                  ElevatedButton(
-                    onPressed: () => _registrarConsumo(500),
-                    child: const Text('+ 500 ml'),
-                  ),
-                ],
-              ),
+              _carregandoApi
+                  ? const CircularProgressIndicator()
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        ElevatedButton(
+                          onPressed: () => _registrarConsumoComAPI(250),
+                          child: const Text('+ 250 ml (API)'),
+                        ),
+                        ElevatedButton(
+                          onPressed: () => _registrarConsumoComAPI(500),
+                          child: const Text('+ 500 ml (API)'),
+                        ),
+                      ],
+                    ),
             ]
           ],
         ),
